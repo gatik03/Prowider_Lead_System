@@ -38,4 +38,7 @@ next-env.d.ts
 # custom ignores
 [Ff]ull[Pp]lan.md
 *[Ii]mplementation_plan*
+test-*.ts
+scratch/
+
 
