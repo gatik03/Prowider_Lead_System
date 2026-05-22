@@ -52,7 +52,12 @@ export async function assignProvidersToLead(leadId: string, serviceId: number) {
           // 1. Lock the AllocationPointer for this serviceId using SELECT ... FOR UPDATE
           // This forces other transactions allocating for the same serviceId to wait,
           // preventing race conditions on the round-robin pointer.
-          const pointers = await tx.$queryRaw<any[]>`
+          interface AllocationPointerRow {
+            id: number;
+            serviceId: number;
+            pointer: number;
+          }
+          const pointers = await tx.$queryRaw<AllocationPointerRow[]>`
             SELECT * FROM "AllocationPointer"
             WHERE "serviceId" = ${serviceId}
             FOR UPDATE
@@ -189,12 +194,16 @@ export async function assignProvidersToLead(leadId: string, serviceId: number) {
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         }
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       attempt++;
-      const isSerializationError =
-        error.code === 'P2034' ||
-        error.meta?.code === '40001' ||
-        error.message?.includes('could not serialize access');
+      let isSerializationError = false;
+      if (error && typeof error === 'object') {
+        const errObj = error as { code?: string; meta?: { code?: string }; message?: string };
+        isSerializationError =
+          errObj.code === 'P2034' ||
+          errObj.meta?.code === '40001' ||
+          errObj.message?.includes('could not serialize access') === true;
+      }
 
       if (isSerializationError && attempt < MAX_RETRIES) {
         console.log(`[ALLOCATION] Serialization conflict detected. Retrying attempt ${attempt}/${MAX_RETRIES}...`);
